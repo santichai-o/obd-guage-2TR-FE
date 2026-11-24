@@ -44,6 +44,7 @@ static const Rect R_PANELS   = {   8, 200,  92, 16 };
 static const Rect R_KUART    = { 103, 200,  70, 16 };
 static const Rect R_PEAK     = { 176, 200,  70, 16 };
 static const Rect R_ALERT    = { 249, 200,  63, 16 };
+static const Rect R_FLIP     = {   8, 218,  92, 16 };   // third row: screen turned 180°
 // ALERT sub-page (SETTINGS -> ALERT): master on/off + three threshold steppers + reset.
 static uint8_t s_page = 0;                                 // 0 = main, 1 = alerts
 static const Rect RA_MASTER  = {  12,  44, 150, 20 };
@@ -189,6 +190,7 @@ static void compose(Canvas &cv, const Settings &s) {
     toggle(cv, t, R_KUART, s.klineUart == 0 ? "K-UART 0" : "K-UART 2", s.klineUart == 0);
     toggle(cv, t, R_PEAK,  s_peakCleared ? "CLEARED" : "RESET PEAK", -1);
     toggle(cv, t, R_ALERT, s.alerts ? "ALERT ON" : "ALERT OFF", -1);   // tap opens the ALERT page
+    toggle(cv, t, R_FLIP,  "FLIP 180", s.flip);
 }
 
 // SETTINGS -> ALERT: toggle the warnings and set each trigger point.
@@ -415,6 +417,7 @@ Action tap(int x, int y, Settings &s) {
     if (inside(R_KUART, x, y)) { s.klineUart = s.klineUart == 0 ? 2 : 0; a = ACT_CHANGED; }
     if (inside(R_UNITS, x, y)) { s.units = s.units ? 0 : 1; a = ACT_CHANGED; }
     if (inside(R_LANG, x, y)) { s.lang = s.lang ? 0 : 1; a = ACT_CHANGED; }
+    if (inside(R_FLIP, x, y)) { s.flip = !s.flip; a = ACT_CHANGED; }
     if (inside(R_ALERT, x, y)) { s_page = 1; draw(s); return ACT_NONE; }   // open the ALERT page
     if (a == ACT_CHANGED || wasCleared) draw(s);
     return a;

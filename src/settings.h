@@ -50,6 +50,8 @@ struct Settings {
     bool     invert     = false;
 #endif
 
+    bool     flip       = false;         // screen turned 180° (board mounted upside down)
+
     static const uint16_t kShiftMin = 3000, kShiftMax = RPM_MAX, kShiftStep = 250;
     static const uint8_t  kBrightMin = 20, kBrightStep = 20;
     // Alert threshold stepper ranges (on-device SETTINGS -> ALERT page).

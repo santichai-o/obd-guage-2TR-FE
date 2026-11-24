@@ -100,6 +100,7 @@ If the splash is removed or the logo is changed, the status bar shows `UNOFFICIA
   last reply, links / drops, plus K-line echo / O2 / AFR or the Bluetooth adapter / PIDs.
 - **COLORS**: flips the panel colours (inverted / normal) and saves it, for when the screen shows a white background after flashing.
 - **GEAR AUTO / OFF**: OFF hides the gear box — use it on hybrids and CVTs, where an estimated gear means nothing
+- **FLIP 180**: turns the screen (and touch) upside down, for a board mounted with the USB port on the other side. Serial: `flip=on|off`
 
 Every value is saved in NVS and restored after a reboot.
 

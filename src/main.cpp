@@ -42,6 +42,7 @@ static TFT_eSPI  tft;
 //                        CS CLK DIN DOUT  (bit-banged XPT2046, see hw/xpt2046_touch.h)
 static Xpt2046Touch touch(33, 25, 32, 39);
 static Preferences prefs;
+static Settings settings;
 
 // ---- touch calibration ------------------------------------------------------------------------
 // BOOT button (or serial `touchcal`) opens the calibration screen; the result lives in NVS
@@ -50,8 +51,13 @@ static const int BOOT_BTN_PIN = 0;
 static TouchCal touchCal = { TOUCH_CAL_XMIN, TOUCH_CAL_XMAX, TOUCH_CAL_YMIN, TOUCH_CAL_YMAX, TOUCH_CAL_AXIS };
 static volatile bool touchCalRequested = false;
 
+// Screen turned 180° (settings.flip): the stored calibration stays in the normal orientation, and
+// swapping each axis' ends mirrors the mapping exactly (raw xmin -> 30 px becomes raw xmin -> 290 px).
+static TouchCal flipCal(const TouchCal &c) { return { c.xmax, c.xmin, c.ymax, c.ymin, c.axis }; }
+
 static void applyTouchCal() {
-    touch.setCal(touchCal.xmin, touchCal.xmax, touchCal.ymin, touchCal.ymax, 320, 240, touchCal.axis);
+    TouchCal c = settings.flip ? flipCal(touchCal) : touchCal;
+    touch.setCal(c.xmin, c.xmax, c.ymin, c.ymax, 320, 240, c.axis);
 }
 
 static void loadTouchCal() {
@@ -89,7 +95,6 @@ static volatile int activeSrc = -1;
 static volatile bool g_reinitSrc = false;    // restart the active source (e.g. HONDA K UART changed)
 
 // ---- settings --------------------------------------------------------------------------
-static Settings settings;
 
 static void loadSettings() {
     prefs.begin("gauge", false);
@@ -101,6 +106,7 @@ static void loadSettings() {
     settings.panels     = prefs.getUChar("panels", settings.panels);
     settings.gearMode   = prefs.getUChar("gearm", settings.gearMode);
     settings.invert     = prefs.getBool("invert", settings.invert);
+    settings.flip       = prefs.getBool("flip", settings.flip);
     uint8_t items[3];
     if (prefs.getBytesLength("pitems") == sizeof items && prefs.getBytes("pitems", items, sizeof items) == sizeof items)
         for (int i = 0; i < 3; i++) if (items[i] < PI_COUNT) settings.panelItem[i] = items[i];
@@ -137,6 +143,7 @@ static void saveSettings() {   // Preferences only writes keys whose value chang
     prefs.putUChar("panels", settings.panels);
     prefs.putUChar("gearm", settings.gearMode);
     prefs.putBool("invert", settings.invert);
+    prefs.putBool("flip", settings.flip);
     uint8_t items[3];
     if (prefs.getBytes("pitems", items, sizeof items) != sizeof items || memcmp(items, settings.panelItem, sizeof items))
         prefs.putBytes("pitems", settings.panelItem, sizeof settings.panelItem);
@@ -186,7 +193,7 @@ static void printHelp() {
         "\n=== REDLINE " REDLINE_VERSION " — crafted by birdlab.th (birdlab.moomdate.tech) ===\n"
         "  mode=sim|touch|serial|obd|custom|honda   theme=ice|lime|amber   shift=7000\n"
         "  bright=20..100   beep=on|off   peak=reset   help\n"
-        "  panels=auto|standard|hybrid   gearmode=auto|off   invert=on|off (panel colours)\n"
+        "  panels=auto|standard|hybrid   gearmode=auto|off   invert=on|off (panel colours)   flip=on|off (screen 180°)\n"
         "  touchcal (or BOOT button)   touchcal=reset   touchcal=xmin,xmax,ymin,ymax,axis\n"
         "  timer   timerlog   timerlog=clear   kdump (HONDA K raw tables)   klineinvert=on|off\n"
         "  klineuart=2|0 (HONDA K pins: 2=GPIO22/27, 0=GPIO3/1 USB header; 0 turns the USB log off)\n"
@@ -272,6 +279,8 @@ static void handleLine(char *line) {
         return;
     } else if (keyIs(p, "invert", &v)) {
         s.invert = !strncasecmp(v, "on", 2) || *v == '1';
+    } else if (keyIs(p, "flip", &v)) {
+        s.flip = !strncasecmp(v, "on", 2) || *v == '1';
     } else if (keyIs(p, "gearmode", &v)) {           // not "gear=": that's a data key
         if (!strncasecmp(v, "auto", 4) || !strncasecmp(v, "on", 2)) s.gearMode = GEARMODE_AUTO;
         else if (!strncasecmp(v, "off", 3)) s.gearMode = GEARMODE_OFF;
@@ -556,6 +565,13 @@ static void applySettings(const Settings &next, bool repaint) {
         tft.invertDisplay(next.invert);
         Serial.printf("[gauge] colour inversion %s\n", next.invert ? "ON" : "OFF");
     }
+    bool flipped = next.flip != prev.flip;
+    if (flipped) {
+        tft.setRotation(next.flip ? 3 : 1);
+        applyTouchCal();                               // reads settings.flip (already next)
+        gauge_ui::invalidate();
+        Serial.printf("[gauge] screen %s\n", next.flip ? "turned 180" : "normal");
+    }
     model.setShiftRpm(next.shiftRpm);
     model.setPanels(next.panels);
     model.setGearHidden(next.gearMode == GEARMODE_OFF);
@@ -578,8 +594,8 @@ static void applySettings(const Settings &next, bool repaint) {
     SimSource::hybrid = next.panels == PANELS_HYBRID;
     if (screen == SCR_GAUGE) {
         if (next.skin != prev.skin || next.theme != prev.theme) skinSetTheme(next.theme);
-    } else if (repaint) {
-        settings_ui::draw(settings);
+    } else if (repaint || flipped) {
+        settings_ui::draw(settings);                   // full page: after a flip every pixel moved
     }
     saveSettings();
 }
@@ -595,7 +611,10 @@ static void repaintScreen();
 
 static void runTouchCal() {
     SimSource::touchThrottle = 0;
-    if (touch_cal_ui::run(tft, touch, touchCal, BOOT_BTN_PIN)) {
+    // the calibration screen works in what is on screen now; store it in the normal orientation
+    TouchCal c = settings.flip ? flipCal(touchCal) : touchCal;
+    if (touch_cal_ui::run(tft, touch, c, BOOT_BTN_PIN)) {
+        touchCal = settings.flip ? flipCal(c) : c;
         saveTouchCal();
         beep(2600, 60, true);
     }
@@ -897,7 +916,7 @@ void setup() {
 
     tft.init();
     tft.invertDisplay(settings.invert);              // saved choice beats the build default
-    tft.setRotation(1);
+    tft.setRotation(settings.flip ? 3 : 1);           // 3 = turned 180° (SETUP -> FLIP 180)
     tft.setSwapBytes(true);                          // canvas holds plain RGB565
 #if defined(ST7789_DRIVER)
     Serial.printf("[tft] ST7789 %dx%d @ %d Hz\n", TFT_WIDTH, TFT_HEIGHT, SPI_FREQUENCY);
