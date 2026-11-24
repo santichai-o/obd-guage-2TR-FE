@@ -38,6 +38,7 @@ static const char *hintFor(const char *reason) {
     if (!strcmp(reason, "BT LOST"))    return "Bluetooth dropped: adapter unplugged?";
     if (!strcmp(reason, "ELM ERROR"))  return "The adapter doesn't answer like an ELM327";
     if (!strcmp(reason, "ECU LOST"))   return "The car stopped answering: ignition off?";
+    if (!strcmp(reason, "BUS BUSY"))   return "K-Line busy: start the engine, unplug add-ons";
     return "Adapter OK, car silent: ignition ON?";
 }
 
@@ -267,6 +268,12 @@ void ObdSource::begin() {
     macFails_ = 0;
     nodataRun_ = 0;
     memset(pidMask_, 0, sizeof pidMask_);
+    protoIdx_ = 0;
+    {   // the protocol that worked last time (K-Line cars: auto search can take 30 s or fail)
+        Preferences p;
+        if (p.begin("obd", false)) { protoIdx_ = p.isKey("proto") ? p.getUChar("proto", 0) : 0; p.end(); }
+        protoSaved_ = protoIdx_ != 0;
+    }
     s_retarget = false;
     loadTarget();
     errors_ = 0;
@@ -312,6 +319,12 @@ bool ObdSource::elm(const char *cmd, uint32_t timeoutMs) {
     }
     resp_[n] = 0;
     return false;
+}
+
+// Swallow output until the ELM's '>' prompt (it may still be busy with a slow protocol search).
+void ObdSource::waitPrompt(uint32_t timeoutMs) {
+    for (uint32_t t0 = millis(); millis() - t0 < timeoutMs; delay(10))
+        while (SerialBT.available()) if (SerialBT.read() == '>') return;
 }
 
 // Returns true if the request got a valid answer (published) or a clean "NO DATA".
@@ -473,10 +486,25 @@ void ObdSource::poll() {
         break;
     }
 
-    case S_SEARCH:
-        // First real request makes the ELM auto-detect the protocol ("SEARCHING...").
+    case S_SEARCH: {
+        // ECU search. Protocol order: auto first (CAN cars answer in ~1 s), then the K-Line ones
+        // forced one by one. Older cars (Vigo / Fortuner 2004-08, Vios / City 2002-07) speak K-Line,
+        // where the auto search goes through J1850, ISO 9141 and KWP slow inits and can take 10-20 s;
+        // cheap clones often give up early ("UNABLE TO CONNECT", "BUS INIT: ...ERROR") but find the
+        // ECU when the protocol is set. Once one works it is kept for later re-searches.
+        //   0 auto  5 KWP fast init  4 KWP 5-baud  3 ISO 9141-2  6 CAN 11-bit 500k
+        static const char kProto[] = {'0', '5', '4', '3', '6'};
+        static const uint32_t kWait[] = {30000, 12000, 15000, 15000, 5000};
+        const int np = sizeof kProto;
+        int pi = protoIdx_ % np;
         connecting("ECU SEARCH");
-        if (elm("0100", 10000) && strstr(resp_, "4100")) {
+        waitPrompt(300);                                 // a late '>' from an aborted search
+        char sp[6] = {'A', 'T', 'S', 'P', kProto[pi], 0};
+        if (!elm(sp, OBD_CMD_TIMEOUT_MS) || !strstr(resp_, "OK"))
+            Serial.printf("[obd] %s -> '%s'\n", sp, resp_);
+        Serial.printf("[obd] ECU search, protocol %c ...\n", kProto[pi]);
+        bool done = elm("0100", kWait[pi]);
+        if (done && strstr(resp_, "4100")) {
             // The 0100 reply says which PIDs 01-20 this ECU has; poll only those. Per-PID
             // "NO DATA" counts start fresh, so a sleepy ECU doesn't disable a PID for good.
             memset(pidMask_, 0, sizeof pidMask_);
@@ -487,6 +515,13 @@ void ObdSource::poll() {
                 snprintf(cmd, sizeof cmd, "01%02X", pg * 0x20);
                 if (!elm(cmd, OBD_CMD_TIMEOUT_MS * 2)) break;
                 pidMask_[pg] = obdSupportedPidsPage(resp_, pg * 0x20);
+            }
+            if (elm("ATDPN", OBD_CMD_TIMEOUT_MS)) Serial.printf("[obd] protocol %s\n", resp_);
+            protoIdx_ = (uint8_t)pi;
+            protoSaved_ = false;
+            {   // remember it for the next boot (only when it changes)
+                Preferences p;
+                if (p.begin("obd", false)) { if (p.getUChar("proto", 0) != pi) p.putUChar("proto", (uint8_t)pi); p.end(); }
             }
             memset(noData_, 0, sizeof noData_);
             nodataRun_ = 0;
@@ -502,11 +537,17 @@ void ObdSource::poll() {
             errors_ = 0;
             state_ = S_RUN;
         } else {
-            Serial.printf("[obd] 0100 -> '%s'\n", resp_);
+            Serial.printf("[obd] 0100 (protocol %c) -> '%s'%s\n", kProto[pi], resp_, done ? "" : " (timeout)");
+            if (!done) waitPrompt(5000);                 // let a slow search finish before the next command
+            // next round: next protocol. A saved one that fails (other car, other adapter) goes back to auto.
+            protoIdx_ = protoSaved_ ? 0 : (uint8_t)((pi + 1) % np);
+            protoSaved_ = false;
             if (!SerialBT.connected()) retryIn(2000, S_CONNECT, "BT LOST");
-            else retryIn(3000, S_SEARCH, "NO ECU");   // ignition off?
+            // K-Line "BUS INIT: BUS BUSY": some cars (Fortuner 2.7 2005) only free the line once the engine runs
+            else retryIn(protoIdx_ ? 500 : 3000, S_SEARCH, strstr(resp_, "BUSBUSY") ? "BUS BUSY" : "NO ECU");
         }
         break;
+    }
 
     case S_RUN: {
         // RPM on every other request; between them the next supported, shown entry of kOthers

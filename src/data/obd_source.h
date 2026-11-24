@@ -61,9 +61,12 @@ private:
     uint8_t  macFails_ = 0;
     uint8_t  nodataRun_ = 0;         // consecutive NO DATA replies
     uint32_t pidMask_[5] = {};       // supported PIDs 01-A0 (0100, 0120 … 0180), [0] = 0: unknown
+    uint8_t  protoIdx_ = 0;          // ECU search: which ATSP protocol to try next (kept once one works)
+    bool     protoSaved_ = false;    // protoIdx_ came from NVS: if it fails, go back to auto first
 
     void retryIn(uint32_t ms, State then, const char *msg);
     bool elm(const char *cmd, uint32_t timeoutMs);
+    void waitPrompt(uint32_t timeoutMs);
     void loadTarget();
     bool scan(char *macOut);
     int  scanInto(BtDevice *out, int max);   // fill the list; returns count

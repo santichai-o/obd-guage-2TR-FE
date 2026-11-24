@@ -34,7 +34,7 @@ REDLINE ไม่ได้อ่านคำสั่งเฉพาะยี่
 
 ---
 
-**ยืนยันแล้ว:** Honda Civic e:HEV (2022+) · Honda City (2012) · Honda City e:HEV · Toyota Hilux Revo (2019) · Mazda BT-50 (2021, 1.9 RZ4E) · Mazda 2 Skyactiv (OBD BT) · มอเตอร์ไซค์ Honda X-ADV 750 · Honda Wave 100i (HONDA K)
+**ยืนยันแล้ว:** Honda Civic e:HEV (2022+) · Honda City (2012) · Honda City e:HEV · Toyota Hilux Revo (2019) · Toyota Fortuner 2.7 (2005) · Mazda BT-50 (2021, 1.9 RZ4E) · Mazda 2 Skyactiv (OBD BT) · มอเตอร์ไซค์ Honda X-ADV 750 · Honda Wave 100i (HONDA K)
 
 ## แยกตามยี่ห้อ
 
@@ -48,6 +48,7 @@ REDLINE ไม่ได้อ่านคำสั่งเฉพาะยี่
 | Toyota Hilux Revo ปีอื่น (2015–2024 รวม Rocco / Z Edition), Fortuner (2015+) | 🟢 | CAN 500k | แพลตฟอร์มและเครื่อง GD ตระกูลเดียวกับ Revo 2019 ที่ยืนยันแล้ว ควรได้เหมือนกัน ([OBDb Hilux](https://github.com/OBDb/Toyota-Hilux)) · ELM327 ก๊อปเกรดต่ำบางตัวต่อไม่ติด | สูง |
 | Toyota Innova Crysta, Hiace / Commuter (2019+), Hilux Champ ดีเซล (2023+) | 🟢 | CAN 500k | ใช้เครื่องดีเซล GD และระบบไฟยุคเดียวกับ Revo น่าจะได้ค่าเหมือนกัน ยังไม่มีคนลอง | กลาง |
 | Toyota Hilux **Vigo** / Fortuner (2004–2015, 1KD/2KD) | 🟡 | K-Line (ISO 14230) รุ่นแรก, รุ่นหลังอาจเป็น CAN | ค่าครบ แต่ K-Line ช้ากว่า (ค่าอัปเดตไม่กี่ครั้งต่อวินาที) และหาเครื่องนานหลายวินาที ([OBD Planet](https://obdplanet.com/obd2-protocol/)) | กลาง |
+| **Toyota Fortuner 2.7 (2005, 2TR-FE เบนซิน)** | ✅ | K-Line (ISO 14230 KWP fast init, ATSP5) | **ยืนยันแล้ว** (พ.ย. 2026) ต่อผ่าน ELM327 ได้ รอบ น้ำหล่อเย็น ไอดี ไฟแบต ขึ้นจอ · รถรองรับ 34 PID: ช่องขวาใช้ได้ LOAD, THROTTLE, STFT/LTFT, IGNITION · ไม่มี MAP, ระดับน้ำมัน, อัตราสิ้นเปลือง, O2 mV, AFR · โหมด auto ของ ELM327 หาไม่เจอ (ค้าง SEARCHING) เกจจะลอง ATSP5 ให้เองแล้วจำไว้ · **ต้องสตาร์ทเครื่องก่อน** แค่บิดกุญแจ ON จะขึ้น BUS BUSY / NO ECU · K-Line ตอบ ~4 ครั้ง/วินาที ค่าอัปเดตช้ากว่ารถ CAN | ยืนยัน |
 | Toyota Corolla Altis, Camry, Corolla Cross (เครื่องยนต์) | 🟢 | CAN 500k | มาตรฐาน | สูง |
 | Toyota **Camry Hybrid** (2012–2018 XV50, 2018+ XV70) | 🟡 | CAN 500k | รอบ ความเร็ว น้ำหล่อเย็น ไอดี ลิ้นเร่ง แบต 12V ได้ แต่ **ไม่มี % แบตไฮบริด** (Toyota เก็บไว้ในคำสั่งเฉพาะยี่ห้อ) · รอบเป็น 0 ตอนวิ่งไฟฟ้า · ตั้ง GEAR OFF และ PANEL STD | สูง |
 | Toyota Altis / Corolla Cross / Yaris Cross **Hybrid** | 🟡 | CAN 500k | เหมือน Camry Hybrid: ไม่มี % แบตไฮบริด ([OBDb](https://github.com/OBDb/Toyota-Corolla-Cross)) · ตั้ง GEAR OFF และ PANEL STD | สูง |
